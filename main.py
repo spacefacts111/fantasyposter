@@ -1,16 +1,13 @@
 import os, random, requests, subprocess, time
 from datetime import datetime
-from openai import OpenAI
 from pydub.generators import Sine
 from pydub import AudioSegment
-
-client = OpenAI()
 
 # ---------- ENV VARIABLES ----------
 LONG_LIVED_TOKEN = os.environ.get("LONG_LIVED_TOKEN")
 APP_ID = os.environ.get("APP_ID")
 APP_SECRET = os.environ.get("APP_SECRET")
-IG_USER_ID = os.environ.get("IG_USER_ID")  # <-- Manual IG User ID
+IG_USER_ID = os.environ.get("IG_USER_ID")  # Manual IG User ID
 
 # ---------- SAFE TOKEN REFRESH (Every 50 Days) ----------
 def refresh_long_lived_token():
@@ -27,36 +24,48 @@ def refresh_long_lived_token():
     else:
         print("⚠️ Token refresh failed:", res)
 
-# ---------- QUOTE GENERATION ----------
+# ---------- FREE QUOTE GENERATION ----------
 def generate_quote(mode):
-    prompts = {
-        "space": "Write a short mysterious poetic quote about stars or cosmic loneliness (max 12 words).",
-        "dark_poetry": "Write a dark, romantic, sad poetry line (max 12 words).",
-        "psychedelic": "Write a trippy, surreal, dreamy poetic line (max 12 words)."
+    keywords = {
+        "space": ["dream", "stars", "universe", "infinite", "mystery"],
+        "dark_poetry": ["sad", "love", "pain", "heart", "tears", "lonely"],
+        "psychedelic": ["dream", "mind", "reality", "vision", "trip"]
     }
-    completion = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "system", "content": prompts[mode]}]
-    )
-    return completion.choices[0].message.content.strip()
+    selected_keywords = keywords[mode]
 
-# ---------- IMAGE GENERATION ----------
+    try:
+        res = requests.get("https://zenquotes.io/api/quotes").json()
+        filtered = [
+            q["q"] for q in res
+            if any(word.lower() in q["q"].lower() for word in selected_keywords)
+        ]
+        if filtered:
+            return random.choice(filtered)[:80]
+        else:
+            return random.choice(res)["q"][:80]
+    except Exception as e:
+        print("⚠️ Quote API error, fallback to default:", e)
+        fallback = {
+            "space": ["The stars don’t answer, they only listen."],
+            "dark_poetry": ["Hearts bleed quietly under smiling faces."],
+            "psychedelic": ["Reality melts when the mind starts to wander."]
+        }
+        return random.choice(fallback[mode])
+
+# ---------- IMAGE GENERATION (PLACEHOLDER) ----------
+# Currently uses OpenAI originally, now switched to placeholder for full free mode
 def generate_image(mode):
-    styles = {
-        "space": "psychedelic cosmic nebula, stars, glowing planets, high contrast space art",
-        "dark_poetry": "dark fantasy, gloomy forest, grainy shadows, cinematic low light",
-        "psychedelic": "psychedelic surreal dreamscape, neon lights, melting reality, vaporwave colors"
+    # Placeholder free images (replace with AI API later if needed)
+    placeholder_images = {
+        "space": "https://images.unsplash.com/photo-1444703686981-a3abbc4d4fe3",
+        "dark_poetry": "https://images.unsplash.com/photo-1506748686214-e9df14d4d9d0",
+        "psychedelic": "https://images.unsplash.com/photo-1501594907352-04cda38ebc29"
     }
-    response = client.images.generate(
-        model="dall-e-3",
-        prompt=styles[mode],
-        size="1024x1024"
-    )
-    url = response.data[0].url
     os.makedirs("generated", exist_ok=True)
+    img_url = placeholder_images[mode]
     img_path = f"generated/{mode}_{int(time.time())}.jpg"
     with open(img_path, "wb") as f:
-        f.write(requests.get(url).content)
+        f.write(requests.get(img_url).content)
     return img_path
 
 # ---------- CREATE VIDEO ----------
