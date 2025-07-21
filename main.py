@@ -10,6 +10,7 @@ client = OpenAI()
 LONG_LIVED_TOKEN = os.environ.get("LONG_LIVED_TOKEN")
 APP_ID = os.environ.get("APP_ID")
 APP_SECRET = os.environ.get("APP_SECRET")
+IG_USER_ID = os.environ.get("IG_USER_ID")  # <-- Manual IG User ID
 
 # ---------- SAFE TOKEN REFRESH (Every 50 Days) ----------
 def refresh_long_lived_token():
@@ -25,17 +26,6 @@ def refresh_long_lived_token():
         print("✅ Long-lived token refreshed.")
     else:
         print("⚠️ Token refresh failed:", res)
-
-# ---------- GET IG USER ID ----------
-def get_ig_user_id():
-    url = f"https://graph.facebook.com/v17.0/me/accounts?access_token={LONG_LIVED_TOKEN}"
-    pages = requests.get(url).json()
-    page_id = pages['data'][0]['id']
-    ig_url = f"https://graph.facebook.com/v17.0/{page_id}?fields=instagram_business_account&access_token={LONG_LIVED_TOKEN}"
-    ig_data = requests.get(ig_url).json()
-    return ig_data['instagram_business_account']['id']
-
-IG_USER_ID = get_ig_user_id()
 
 # ---------- QUOTE GENERATION ----------
 def generate_quote(mode):
