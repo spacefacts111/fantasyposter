@@ -7,16 +7,16 @@ from pydub import AudioSegment
 LONG_LIVED_TOKEN = os.environ.get("LONG_LIVED_TOKEN")
 APP_ID = os.environ.get("APP_ID")
 APP_SECRET = os.environ.get("APP_SECRET")
-IG_USER_ID = os.environ.get("IG_USER_ID")  # Manual IG User ID
+IG_USER_ID = os.environ.get("IG_USER_ID")
 
-# ---------- CLEAN OR CREATE GENERATED FOLDER ONCE ----------
+# ---------- CLEAN OR CREATE GENERATED FOLDER ----------
 def prepare_generated_folder():
-    if os.path.isfile("generated"):  # If it's a file, delete it
+    if os.path.isfile("generated"):
         os.remove("generated")
     if not os.path.isdir("generated"):
         os.makedirs("generated")
 
-# ---------- SAFE TOKEN REFRESH ----------
+# ---------- TOKEN REFRESH ----------
 def refresh_long_lived_token():
     global LONG_LIVED_TOKEN
     url = (
@@ -54,7 +54,7 @@ def generate_quote(mode):
         }
         return random.choice(fallback[mode])
 
-# ---------- IMAGE GENERATION ----------
+# ---------- IMAGE GENERATION (Placeholder for now) ----------
 def generate_image(mode):
     placeholder_images = {
         "space": "https://images.unsplash.com/photo-1444703686981-a3abbc4d4fe3",
@@ -67,15 +67,32 @@ def generate_image(mode):
         f.write(requests.get(img_url).content)
     return img_path
 
-# ---------- CREATE VIDEO ----------
+# ---------- CREATE VIDEO (FFmpeg Escaping Fixed) ----------
 def create_video_ffmpeg(image_path, text, output_path="generated/final.mp4"):
+    # Escape dangerous characters for ffmpeg
+    safe_text = (
+        text.replace(":", "\\:")
+        .replace("'", "\\'")
+        .replace('"', '\\"')
+        .replace("%", "\\%")
+        .replace(",", "\\,")
+    )
+
     cmd = [
         "ffmpeg", "-y", "-loop", "1",
         "-i", image_path,
-        "-vf", f"scale=1080:1920,drawtext=text='{text}':x=(w-text_w)/2:y=h-200:fontsize=48:fontcolor=white",
+        "-vf", f"scale=1080:1920,drawtext=text='{safe_text}':x=(w-text_w)/2:y=h-200:fontsize=48:fontcolor=white",
         "-t", "10", "-c:v", "libx264", "-pix_fmt", "yuv420p", output_path
     ]
-    subprocess.run(cmd)
+
+    print("▶️ Generating video...")
+    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+
+    if not os.path.exists(output_path):
+        raise Exception("❌ Video generation failed (file missing).")
+    if os.path.getsize(output_path) < 10000:
+        raise Exception("❌ Video too small or corrupted.")
+    print("✅ Video created:", output_path)
     return output_path
 
 # ---------- GENERATE AMBIENT AUDIO ----------
@@ -104,7 +121,14 @@ def add_audio(video_path, mode, output_path="generated/final_audio.mp4"):
         "ffmpeg", "-y", "-i", video_path, "-i", audio_path,
         "-shortest", "-c:v", "copy", "-c:a", "aac", output_path
     ]
-    subprocess.run(cmd)
+    print("▶️ Adding audio to video...")
+    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+
+    if not os.path.exists(output_path):
+        raise Exception("❌ Final video generation failed.")
+    if os.path.getsize(output_path) < 10000:
+        raise Exception("❌ Final video corrupted.")
+    print("✅ Final video ready:", output_path)
     return output_path
 
 # ---------- HASHTAGS ----------
@@ -124,6 +148,7 @@ def upload_to_railway(video_path):
 # ---------- POST TO INSTAGRAM ----------
 def upload_instagram_reel(video_path, caption):
     video_url = upload_to_railway(video_path)
+    print("▶️ Uploading to Instagram:", video_url)
     url = f"https://graph.facebook.com/v17.0/{IG_USER_ID}/media"
     params = {
         "video_url": video_url,
@@ -132,10 +157,14 @@ def upload_instagram_reel(video_path, caption):
         "access_token": LONG_LIVED_TOKEN
     }
     res = requests.post(url, data=params).json()
-    creation_id = res.get("id")
+    print("Media creation response:", res)
+
+    if "id" not in res:
+        raise Exception(f"❌ Failed to create media: {res}")
+
     publish_url = f"https://graph.facebook.com/v17.0/{IG_USER_ID}/media_publish"
     publish_res = requests.post(publish_url, data={
-        "creation_id": creation_id,
+        "creation_id": res["id"],
         "access_token": LONG_LIVED_TOKEN
     }).json()
     print("✅ Posted to Instagram:", publish_res)
