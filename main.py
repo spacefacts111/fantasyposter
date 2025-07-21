@@ -8,6 +8,7 @@ LONG_LIVED_TOKEN = os.environ.get("LONG_LIVED_TOKEN")
 APP_ID = os.environ.get("APP_ID")
 APP_SECRET = os.environ.get("APP_SECRET")
 IG_USER_ID = os.environ.get("IG_USER_ID")
+DEEP_AI_KEY = os.environ.get("DEEP_AI_KEY")
 
 # ---------- CLEAN OR CREATE GENERATED FOLDER ----------
 def prepare_generated_folder():
@@ -54,8 +55,35 @@ def generate_quote(mode):
         }
         return random.choice(fallback[mode])
 
-# ---------- IMAGE GENERATION (Placeholder for now) ----------
+# ---------- AI IMAGE GENERATION (DeepAI) ----------
 def generate_image(mode):
+    prompts = {
+        "space": "psychedelic cosmic nebula, glowing stars, deep space fantasy art",
+        "dark_poetry": "dark fantasy, misty forest, gothic aesthetic, cinematic shadows",
+        "psychedelic": "surreal trippy dreamscape, neon vaporwave colors, melting reality"
+    }
+    headers = {"api-key": DEEP_AI_KEY}
+    try:
+        res = requests.post(
+            "https://api.deepai.org/api/stable-diffusion",
+            data={"text": prompts[mode]},
+            headers=headers
+        ).json()
+        if "output_url" not in res:
+            raise Exception(f"API returned: {res}")
+
+        img_url = res["output_url"]
+        img_path = f"generated/{mode}_{int(time.time())}.jpg"
+        with open(img_path, "wb") as f:
+            f.write(requests.get(img_url).content)
+        print("✅ AI Image Generated:", img_path)
+        return img_path
+    except Exception as e:
+        print("⚠️ AI generation failed, fallback to placeholder:", e)
+        return generate_placeholder_image(mode)
+
+# ---------- PLACEHOLDER IMAGE (Fallback) ----------
+def generate_placeholder_image(mode):
     placeholder_images = {
         "space": "https://images.unsplash.com/photo-1444703686981-a3abbc4d4fe3",
         "dark_poetry": "https://images.unsplash.com/photo-1506748686214-e9df14d4d9d0",
@@ -69,7 +97,6 @@ def generate_image(mode):
 
 # ---------- CREATE VIDEO (FFmpeg Escaping Fixed) ----------
 def create_video_ffmpeg(image_path, text, output_path="generated/final.mp4"):
-    # Escape dangerous characters for ffmpeg
     safe_text = (
         text.replace(":", "\\:")
         .replace("'", "\\'")
@@ -88,10 +115,8 @@ def create_video_ffmpeg(image_path, text, output_path="generated/final.mp4"):
     print("▶️ Generating video...")
     subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
-    if not os.path.exists(output_path):
-        raise Exception("❌ Video generation failed (file missing).")
-    if os.path.getsize(output_path) < 10000:
-        raise Exception("❌ Video too small or corrupted.")
+    if not os.path.exists(output_path) or os.path.getsize(output_path) < 10000:
+        raise Exception("❌ Video generation failed.")
     print("✅ Video created:", output_path)
     return output_path
 
@@ -124,10 +149,8 @@ def add_audio(video_path, mode, output_path="generated/final_audio.mp4"):
     print("▶️ Adding audio to video...")
     subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
-    if not os.path.exists(output_path):
+    if not os.path.exists(output_path) or os.path.getsize(output_path) < 10000:
         raise Exception("❌ Final video generation failed.")
-    if os.path.getsize(output_path) < 10000:
-        raise Exception("❌ Final video corrupted.")
     print("✅ Final video ready:", output_path)
     return output_path
 
