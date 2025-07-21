@@ -63,6 +63,7 @@ def generate_image(mode):
         size="1024x1024"
     )
     url = response.data[0].url
+    os.makedirs("generated", exist_ok=True)
     img_path = f"generated/{mode}_{int(time.time())}.jpg"
     with open(img_path, "wb") as f:
         f.write(requests.get(url).content)
@@ -120,7 +121,7 @@ def generate_hashtags(mode):
 
 # ---------- RAILWAY STATIC URL ----------
 def upload_to_railway(video_path):
-    return f"https://{os.environ.get('RAILWAY_STATIC_URL')}/generated/{os.path.basename(video_path)}"
+    return f"https://{os.environ.get('RAILWAY_STATIC_URL')}/{os.path.basename(video_path)}"
 
 # ---------- POST TO INSTAGRAM ----------
 def upload_instagram_reel(video_path, caption):
